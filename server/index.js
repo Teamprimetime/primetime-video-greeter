@@ -120,13 +120,18 @@ app.post('/api/send', async (req, res) => {
     sendRecords.push({ sendId: result.lastID, realtor: r, message: personalMsg });
   }
 
-  if (senderEmail && senderPassword) {
+  const emailUser = process.env.SMTP_EMAIL || senderEmail;
+  const emailPass = process.env.SMTP_PASSWORD || senderPassword;
+  const emailHost = process.env.SMTP_HOST || senderHost || 'mail.privateemail.com';
+  const emailPort = parseInt(process.env.SMTP_PORT || senderPort || 465);
+
+  if (emailUser && emailPass) {
     try {
       const transporter = nodemailer.createTransport({
-        host: senderHost || 'smtp.gmail.com',
-        port: senderPort || 587,
-        secure: false,
-        auth: { user: senderEmail, pass: senderPassword }
+        host: emailHost,
+        port: emailPort,
+        secure: emailPort === 465,
+        auth: { user: emailUser, pass: emailPass }
       });
       const baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
       for (const { sendId, realtor, message: personalMsg } of sendRecords) {
@@ -134,7 +139,7 @@ app.post('/api/send', async (req, res) => {
         const firstName = realtor.name.split(' ')[0];
         const html = generateEmailHTML(firstName, personalMsg, watchUrl, videoId, baseUrl);
         await transporter.sendMail({
-          from: `"Paul PT Terwilliger - Team Prime Time" <${senderEmail}>`,
+          from: `"Paul PT Terwilliger - Team Prime Time" <${emailUser}>`,
           to: realtor.email,
           subject: subject.replace(/{name}/g, firstName),
           html
@@ -142,6 +147,7 @@ app.post('/api/send', async (req, res) => {
       }
       res.json({ success: true, sent: realtors.length, mode: 'email' });
     } catch (e) {
+      console.error('Email error:', e.message);
       res.json({ success: true, sent: realtors.length, mode: 'preview', error: e.message });
     }
   } else {
