@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
