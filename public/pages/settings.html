@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings — Team Prime Time</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/main.css">
+<style>
+.settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+@media(max-width:700px){ .settings-grid{grid-template-columns:1fr} }
+.info-box { background:rgba(201,168,76,0.06); border:1px solid rgba(201,168,76,0.2); border-radius:10px; padding:16px; margin-bottom:20px; font-size:13px; line-height:1.6; color:rgba(248,245,239,0.8); }
+.info-box strong { color:var(--gold); }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">PT</div>
+      <div>
+        <div class="logo-name">Team Prime Time</div>
+        <div class="logo-sub">Video Greeter</div>
+      </div>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/" class="nav-link">🏠 Home</a></li>
+      <li><a href="/record" class="nav-link">🎥 Record & Send</a></li>
+      <li><a href="/contacts" class="nav-link">👥 Realtors</a></li>
+      <li><a href="/dashboard" class="nav-link">📊 Dashboard</a></li>
+      <li><a href="/settings" class="nav-link active">⚙️ Settings</a></li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="sig-mini">Paul "PT" Terwilliger</div>
+      <div class="sig-mini-sub">NMLS #321929</div>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Settings</h1>
+        <p class="page-sub">Configure your email to send directly from the app</p>
+      </div>
+    </div>
+
+    <div class="settings-grid">
+      <div>
+        <div class="card">
+          <div class="card-title">📧 Email Setup</div>
+          <div class="info-box">
+            <strong>How it works:</strong> Enter your email credentials and the app sends videos directly from your email address. Realtors will see it coming from <strong>you</strong> — not a third party service.<br><br>
+            For Gmail, use an <strong>App Password</strong> (not your regular password). Your son can help set this up in about 2 minutes.
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Your Email Address</label>
+            <input class="field-input" id="cfgEmail" placeholder="paul@teamprimetimeloans.com" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">App Password</label>
+            <input class="field-input" id="cfgPassword" type="password" placeholder="Your email app password" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">SMTP Server (your son will know this)</label>
+            <input class="field-input" id="cfgHost" placeholder="smtp.gmail.com" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Port</label>
+            <input class="field-input" id="cfgPort" placeholder="587" />
+          </div>
+          <button class="btn-gold" style="width:100%" onclick="saveSettings()">💾 Save Email Settings</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-title">🌐 Your Video Domain</div>
+          <div class="info-box">
+            This is the web address where your videos will be hosted. Once your son sets up the server, your videos will live at this address.
+          </div>
+          <div class="field-group">
+            <label class="field-label">Your Website URL</label>
+            <input class="field-input" id="cfgBaseUrl" placeholder="https://video.teamprimetimeloans.com" />
+          </div>
+          <button class="btn-gold" style="width:100%" onclick="saveSettings()">💾 Save</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">👤 Your Info</div>
+          <div class="field-group">
+            <label class="field-label">Your Name</label>
+            <input class="field-input" id="cfgName" value='Paul "PT" Terwilliger' />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Phone</label>
+            <input class="field-input" id="cfgPhone" value="(860) 639-8290" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">NMLS #</label>
+            <input class="field-input" id="cfgNmls" value="321929" />
+          </div>
+          <button class="btn-gold" style="width:100%" onclick="saveSettings()">💾 Save</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+window.onload = () => {
+  const s = JSON.parse(localStorage.getItem('ptSettings') || '{}');
+  if(s.email) document.getElementById('cfgEmail').value = s.email;
+  if(s.password) document.getElementById('cfgPassword').value = s.password;
+  if(s.host) document.getElementById('cfgHost').value = s.host;
+  if(s.port) document.getElementById('cfgPort').value = s.port;
+  if(s.baseUrl) document.getElementById('cfgBaseUrl').value = s.baseUrl;
+  if(s.name) document.getElementById('cfgName').value = s.name;
+  if(s.phone) document.getElementById('cfgPhone').value = s.phone;
+  if(s.nmls) document.getElementById('cfgNmls').value = s.nmls;
+};
+
+function saveSettings() {
+  const settings = {
+    email: document.getElementById('cfgEmail').value.trim(),
+    password: document.getElementById('cfgPassword').value,
+    host: document.getElementById('cfgHost').value.trim() || 'smtp.gmail.com',
+    port: parseInt(document.getElementById('cfgPort').value) || 587,
+    baseUrl: document.getElementById('cfgBaseUrl').value.trim(),
+    name: document.getElementById('cfgName').value.trim(),
+    phone: document.getElementById('cfgPhone').value.trim(),
+    nmls: document.getElementById('cfgNmls').value.trim()
+  };
+  localStorage.setItem('ptSettings', JSON.stringify(settings));
+  showToast('✅ Settings saved!');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

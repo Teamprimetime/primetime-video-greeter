@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Team Prime Time</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/main.css">
+<style>
+.track-row {
+  display:flex; align-items:center; gap:14px;
+  padding:16px 20px; border-bottom:1px solid rgba(201,168,76,0.08);
+  transition:background 0.15s;
+}
+.track-row:hover { background:rgba(201,168,76,0.04); }
+.track-avatar {
+  width:40px; height:40px; background:var(--navy-light); border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Playfair Display',serif; font-size:16px; color:var(--gold);
+  font-weight:700; flex-shrink:0; text-transform:uppercase;
+}
+.track-info { flex:1; }
+.track-name { font-weight:600; font-size:14px; }
+.track-meta { font-size:12px; color:var(--gray); margin-top:2px; }
+.track-right { text-align:right; }
+.track-badge { padding:5px 12px; border-radius:100px; font-size:11px; font-weight:700; }
+.badge-watched { background:rgba(74,222,128,0.12); color:#4ade80; }
+.badge-sent { background:rgba(201,168,76,0.12); color:var(--gold); }
+.track-time { font-size:11px; color:var(--gray); margin-top:4px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">PT</div>
+      <div>
+        <div class="logo-name">Team Prime Time</div>
+        <div class="logo-sub">Video Greeter</div>
+      </div>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/" class="nav-link">🏠 Home</a></li>
+      <li><a href="/record" class="nav-link">🎥 Record & Send</a></li>
+      <li><a href="/contacts" class="nav-link">👥 Realtors</a></li>
+      <li><a href="/dashboard" class="nav-link active">📊 Dashboard</a></li>
+      <li><a href="/settings" class="nav-link">⚙️ Settings</a></li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="sig-mini">Paul "PT" Terwilliger</div>
+      <div class="sig-mini-sub">NMLS #321929</div>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-sub">See who watched your videos</p>
+      </div>
+      <a href="/record" class="btn-gold">🎥 New Video</a>
+    </div>
+
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card"><div class="stat-icon">📤</div><div class="stat-num" id="s1">—</div><div class="stat-label">Total Sent</div></div>
+      <div class="stat-card"><div class="stat-icon">👀</div><div class="stat-num" id="s2">—</div><div class="stat-label">Watched</div></div>
+      <div class="stat-card"><div class="stat-icon">📈</div><div class="stat-num" id="s3">—</div><div class="stat-label">Watch Rate</div></div>
+      <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-num" id="s4">—</div><div class="stat-label">Realtors</div></div>
+    </div>
+
+    <h2 class="section-title">Recent Sends</h2>
+    <div style="background:var(--navy-mid);border:1px solid rgba(201,168,76,0.12);border-radius:14px;overflow:hidden">
+      <div id="trackList"><div class="empty-state">Loading...</div></div>
+    </div>
+  </main>
+</div>
+
+<script>
+fetch('/api/stats').then(r=>r.json()).then(data => {
+  document.getElementById('s1').textContent = data.totalSent;
+  document.getElementById('s2').textContent = data.totalViewed;
+  document.getElementById('s3').textContent = data.totalSent > 0 ? Math.round((data.totalViewed/data.totalSent)*100)+'%' : '0%';
+  document.getElementById('s4').textContent = data.realtorCount;
+
+  const list = document.getElementById('trackList');
+  if(!data.recentSends.length) {
+    list.innerHTML = '<div class="empty-state">No sends yet — record your first video! 🎥</div>';
+    return;
+  }
+
+  list.innerHTML = data.recentSends.map(s => {
+    const sentDate = new Date(s.sent_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const watchedDate = s.viewed_at ? new Date(s.viewed_at).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : null;
+    return `
+    <div class="track-row">
+      <div class="track-avatar">${s.realtor_name ? s.realtor_name[0] : '?'}</div>
+      <div class="track-info">
+        <div class="track-name">${s.realtor_name || 'Unknown'}</div>
+        <div class="track-meta">${s.subject || 'Video greeting'} · Sent ${sentDate}</div>
+      </div>
+      <div class="track-right">
+        <div class="track-badge ${s.viewed ? 'badge-watched' : 'badge-sent'}">${s.viewed ? '👀 Watched' : '📤 Sent'}</div>
+        <div class="track-time">${watchedDate ? 'Watched ' + watchedDate : '—'}</div>
+      </div>
+    </div>`;
+  }).join('');
+});
+</script>
+</body>
+</html>

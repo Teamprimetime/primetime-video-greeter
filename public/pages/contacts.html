@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Realtors — Team Prime Time</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/main.css">
+<style>
+.contacts-grid { display:grid; grid-template-columns:340px 1fr; gap:24px; }
+@media(max-width:800px){ .contacts-grid { grid-template-columns:1fr; } }
+
+.contact-card {
+  display:flex; align-items:center; gap:14px;
+  padding:16px 18px; border-radius:12px;
+  background:var(--navy-mid); border:1px solid rgba(201,168,76,0.1);
+  transition:all 0.15s; margin-bottom:10px;
+}
+.contact-card:hover { border-color:rgba(201,168,76,0.3); }
+.contact-avatar {
+  width:44px; height:44px; background:var(--navy-light); border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Playfair Display',serif; font-size:18px; color:var(--gold);
+  font-weight:700; flex-shrink:0; text-transform:uppercase;
+}
+.contact-info { flex:1; }
+.contact-name { font-weight:600; font-size:15px; }
+.contact-details { font-size:12px; color:var(--gray); margin-top:2px; }
+.delete-btn {
+  background:transparent; border:none; color:rgba(224,82,82,0.5);
+  cursor:pointer; font-size:18px; padding:4px 8px; border-radius:6px;
+  transition:all 0.15s;
+}
+.delete-btn:hover { color:var(--red); background:rgba(224,82,82,0.1); }
+
+.import-area {
+  border:2px dashed rgba(201,168,76,0.2); border-radius:12px;
+  padding:24px; text-align:center; cursor:pointer; transition:all 0.15s;
+  margin-bottom:20px;
+}
+.import-area:hover { border-color:rgba(201,168,76,0.5); background:rgba(201,168,76,0.04); }
+.import-area p { font-size:13px; color:var(--gray); margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">PT</div>
+      <div>
+        <div class="logo-name">Team Prime Time</div>
+        <div class="logo-sub">Video Greeter</div>
+      </div>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/" class="nav-link">🏠 Home</a></li>
+      <li><a href="/record" class="nav-link">🎥 Record & Send</a></li>
+      <li><a href="/contacts" class="nav-link active">👥 Realtors</a></li>
+      <li><a href="/dashboard" class="nav-link">📊 Dashboard</a></li>
+      <li><a href="/settings" class="nav-link">⚙️ Settings</a></li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="sig-mini">Paul "PT" Terwilliger</div>
+      <div class="sig-mini-sub">NMLS #321929</div>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Realtors</h1>
+        <p class="page-sub" id="countDisplay">Loading...</p>
+      </div>
+    </div>
+
+    <div class="contacts-grid">
+      <!-- Add Form -->
+      <div>
+        <div class="card">
+          <div class="card-title">Add a Realtor</div>
+          <div class="field-group">
+            <label class="field-label">Full Name *</label>
+            <input class="field-input" id="addName" placeholder="Sarah Johnson" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Email Address *</label>
+            <input class="field-input" id="addEmail" type="email" placeholder="sarah@realty.com" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Company (optional)</label>
+            <input class="field-input" id="addCompany" placeholder="Keller Williams" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Phone (optional)</label>
+            <input class="field-input" id="addPhone" type="tel" placeholder="(860) 555-0100" />
+          </div>
+          <button class="btn-gold" style="width:100%" onclick="addRealtor()">➕ Add Realtor</button>
+        </div>
+
+        <div class="card" style="margin-top:0">
+          <div class="card-title">Import from CSV</div>
+          <div class="import-area" onclick="document.getElementById('csvInput').click()">
+            <div style="font-size:32px">📂</div>
+            <p>Click to upload a CSV file<br><span style="font-size:11px">Columns: name, email, company, phone</span></p>
+          </div>
+          <input type="file" id="csvInput" accept=".csv" style="display:none" onchange="importCSV(this)">
+          <p style="font-size:12px;color:var(--gray)">Format: name, email, company (optional), phone (optional)</p>
+        </div>
+      </div>
+
+      <!-- Contact List -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h2 class="section-title" style="margin:0">Your Realtors</h2>
+          <input class="field-input" id="searchInput" placeholder="🔍 Search..." style="width:220px;padding:10px 14px" oninput="filterList()" />
+        </div>
+        <div id="contactList"><div class="empty-state">Loading...</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let allRealtors = [];
+
+window.onload = loadRealtors;
+
+function loadRealtors() {
+  fetch('/api/realtors').then(r=>r.json()).then(data => {
+    allRealtors = data;
+    renderList(data);
+    document.getElementById('countDisplay').textContent = `${data.length} realtor${data.length!==1?'s':''} in your list`;
+  });
+}
+
+function renderList(realtors) {
+  const list = document.getElementById('contactList');
+  if(!realtors.length) {
+    list.innerHTML = '<div class="empty-state">No realtors yet — add some using the form! 👈</div>';
+    return;
+  }
+  list.innerHTML = realtors.map(r => `
+    <div class="contact-card">
+      <div class="contact-avatar">${r.name[0]}</div>
+      <div class="contact-info">
+        <div class="contact-name">${r.name}</div>
+        <div class="contact-details">${[r.company, r.email, r.phone].filter(Boolean).join(' · ')}</div>
+      </div>
+      <button class="delete-btn" onclick="deleteRealtor(${r.id}, '${r.name.replace(/'/g,"\\'")}')">✕</button>
+    </div>
+  `).join('');
+}
+
+function filterList() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  renderList(allRealtors.filter(r => 
+    r.name.toLowerCase().includes(q) || 
+    r.email.toLowerCase().includes(q) || 
+    (r.company||'').toLowerCase().includes(q)
+  ));
+}
+
+async function addRealtor() {
+  const name = document.getElementById('addName').value.trim();
+  const email = document.getElementById('addEmail').value.trim();
+  const company = document.getElementById('addCompany').value.trim();
+  const phone = document.getElementById('addPhone').value.trim();
+
+  if(!name || !email) { showToast('⚠️ Name and email are required'); return; }
+
+  const res = await fetch('/api/realtors', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name, email, company, phone })
+  });
+
+  const data = await res.json();
+  if(data.error) { showToast('⚠️ ' + data.error); return; }
+
+  showToast(`✅ ${name} added!`);
+  document.getElementById('addName').value = '';
+  document.getElementById('addEmail').value = '';
+  document.getElementById('addCompany').value = '';
+  document.getElementById('addPhone').value = '';
+  loadRealtors();
+}
+
+async function deleteRealtor(id, name) {
+  if(!confirm(`Remove ${name} from your list?`)) return;
+  await fetch(`/api/realtors/${id}`, { method:'DELETE' });
+  showToast(`Removed ${name}`);
+  loadRealtors();
+}
+
+function importCSV(input) {
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const lines = e.target.result.split('\n').filter(l=>l.trim());
+    let added = 0, skipped = 0;
+    for(const line of lines) {
+      const [name, email, company, phone] = line.split(',').map(s=>s.trim().replace(/"/g,''));
+      if(!name || !email || !email.includes('@')) { skipped++; continue; }
+      const res = await fetch('/api/realtors', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ name, email, company:'', phone:'' })
+      });
+      const d = await res.json();
+      if(d.error) skipped++; else added++;
+    }
+    showToast(`✅ Imported ${added} realtors${skipped?' ('+skipped+' skipped)':''}`);
+    loadRealtors();
+  };
+  reader.readAsText(file);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Record & Send — Team Prime Time</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/main.css">
+<style>
+.record-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media(max-width:800px){ .record-grid { grid-template-columns: 1fr; } }
+
+.video-wrap { position:relative; background:#000; border-radius:12px; overflow:hidden; aspect-ratio:16/9; }
+.video-wrap video { width:100%; height:100%; object-fit:cover; display:block; }
+#recordedVideo { display:none; }
+
+.rec-badge { position:absolute; top:12px; left:12px; display:none; align-items:center; gap:6px; background:rgba(0,0,0,0.65); padding:5px 12px; border-radius:100px; }
+.rec-badge.show { display:flex; }
+.rec-dot { width:8px; height:8px; background:#e05252; border-radius:50%; animation:blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+.rec-badge span { font-size:11px; font-weight:700; color:#fff; letter-spacing:1.5px; text-transform:uppercase; }
+
+.timer { position:absolute; top:12px; right:12px; background:rgba(0,0,0,0.65); padding:5px 12px; border-radius:100px; font-size:12px; font-weight:700; color:#fff; display:none; }
+.timer.show { display:block; }
+
+.vid-overlay { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(to top, rgba(13,27,42,0.95) 0%, transparent 100%); padding:16px 14px 10px; }
+.vid-overlay-name { font-family:'Playfair Display',serif; font-size:15px; color:#e8c96a; font-weight:700; }
+.vid-overlay-sub { font-size:10px; color:rgba(255,255,255,0.6); letter-spacing:1px; text-transform:uppercase; }
+
+.controls { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
+.ctrl-btn { flex:1; padding:12px 16px; border-radius:10px; border:none; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.15s; min-width:90px; }
+.ctrl-record { background:linear-gradient(135deg,#c9a84c,#e8c96a); color:#0d1b2a; }
+.ctrl-record:hover { filter:brightness(1.08); }
+.ctrl-stop { background:rgba(224,82,82,0.15); color:#e05252; border:1px solid rgba(224,82,82,0.3); }
+.ctrl-stop:hover { background:rgba(224,82,82,0.25); }
+.ctrl-retake { background:transparent; color:#c9a84c; border:1px solid rgba(201,168,76,0.35); }
+.ctrl-retake:hover { background:rgba(201,168,76,0.08); }
+.ctrl-btn:disabled { opacity:0.3; cursor:not-allowed; }
+
+.status-row { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:12px; color:#8a94a0; }
+.sdot { width:6px; height:6px; border-radius:50%; background:#8a94a0; flex-shrink:0; }
+.sdot.green { background:#4ade80; }
+.sdot.red { background:#e05252; animation:blink 1s infinite; }
+
+.realtor-list { max-height:320px; overflow-y:auto; }
+.realtor-check { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:10px; cursor:pointer; transition:background 0.15s; border-bottom:1px solid rgba(201,168,76,0.08); }
+.realtor-check:hover { background:rgba(201,168,76,0.05); }
+.realtor-check input[type=checkbox] { accent-color:#c9a84c; width:16px; height:16px; cursor:pointer; }
+.realtor-check-avatar { width:34px; height:34px; background:#1e3250; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'Playfair Display',serif; font-size:14px; color:#c9a84c; font-weight:700; flex-shrink:0; text-transform:uppercase; }
+.realtor-check-name { font-weight:600; font-size:14px; }
+.realtor-check-email { font-size:11px; color:#8a94a0; }
+
+.select-all-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.select-count { font-size:12px; color:#8a94a0; }
+
+.send-summary { background:rgba(201,168,76,0.08); border:1px solid rgba(201,168,76,0.2); border-radius:10px; padding:16px; margin-top:16px; display:none; }
+.send-summary.show { display:block; }
+.send-summary p { font-size:13px; color:#f8f5ef; line-height:1.6; }
+
+.template-row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">PT</div>
+      <div>
+        <div class="logo-name">Team Prime Time</div>
+        <div class="logo-sub">Video Greeter</div>
+      </div>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/" class="nav-link">🏠 Home</a></li>
+      <li><a href="/record" class="nav-link active">🎥 Record & Send</a></li>
+      <li><a href="/contacts" class="nav-link">👥 Realtors</a></li>
+      <li><a href="/dashboard" class="nav-link">📊 Dashboard</a></li>
+      <li><a href="/settings" class="nav-link">⚙️ Settings</a></li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="sig-mini">Paul "PT" Terwilliger</div>
+      <div class="sig-mini-sub">NMLS #321929</div>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Record & Send</h1>
+        <p class="page-sub">Record your video, write your message, pick your realtors — send.</p>
+      </div>
+    </div>
+
+    <div class="record-grid">
+
+      <!-- LEFT: Record -->
+      <div>
+        <div class="card">
+          <div class="card-title">1. Record Your Video</div>
+          <div class="video-wrap">
+            <video id="livePreview" autoplay muted playsinline></video>
+            <video id="recordedVideo" controls playsinline></video>
+            <div class="rec-badge" id="recBadge"><div class="rec-dot"></div><span>REC</span></div>
+            <div class="timer" id="timer">0:00</div>
+            <div class="vid-overlay" id="vidOverlay">
+              <div class="vid-overlay-name" id="overlayName">Good morning!</div>
+              <div class="vid-overlay-sub">Team Prime Time Loans · PT</div>
+            </div>
+          </div>
+          <div class="controls">
+            <button class="ctrl-btn ctrl-record" id="btnRecord" onclick="startRec()">▶ Start Recording</button>
+            <button class="ctrl-btn ctrl-stop" id="btnStop" onclick="stopRec()" disabled>■ Stop</button>
+            <button class="ctrl-btn ctrl-retake" id="btnRetake" onclick="retake()" style="display:none">↩ Retake</button>
+          </div>
+          <div class="status-row">
+            <div class="sdot" id="sDot"></div>
+            <span id="sStatus">Click Start Recording to begin</span>
+          </div>
+        </div>
+
+        <!-- Message -->
+        <div class="card">
+          <div class="card-title">2. Write Your Message</div>
+          <div class="field-group">
+            <label class="field-label">Email Subject</label>
+            <input class="field-input" id="subject" value="Happy Monday — quick update from PT 👋" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Message Templates</label>
+            <div class="template-row">
+              <button class="chip active" onclick="loadTemplate(this,0)">Market Update</button>
+              <button class="chip" onclick="loadTemplate(this,1)">Rate Alert</button>
+              <button class="chip" onclick="loadTemplate(this,2)">Checking In</button>
+              <button class="chip" onclick="loadTemplate(this,3)">New Program</button>
+            </div>
+            <textarea class="field-input" id="msgBody" rows="7"></textarea>
+            <div style="font-size:11px;color:#8a94a0;margin-top:6px">Use {name} — it gets replaced with each realtor's first name automatically.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Realtors + Send -->
+      <div>
+        <div class="card">
+          <div class="card-title">3. Pick Your Realtors</div>
+          <div class="select-all-row">
+            <button class="chip" onclick="selectAll()">Select All</button>
+            <span class="select-count" id="selectCount">0 selected</span>
+          </div>
+          <div class="realtor-list" id="realtorList">
+            <div class="empty-state">Loading contacts...</div>
+          </div>
+          <div style="margin-top:14px">
+            <a href="/contacts" style="font-size:13px;color:#c9a84c;text-decoration:none">➕ Add more realtors →</a>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">4. Send</div>
+          <div class="send-summary" id="sendSummary"></div>
+          <button class="btn-gold" style="width:100%;padding:16px;font-size:15px;margin-top:8px" onclick="sendVideos()" id="sendBtn">🚀 Upload & Send Videos</button>
+          <p style="font-size:12px;color:#8a94a0;margin-top:10px;text-align:center">You'll preview before anything goes out.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const TEMPLATES = [
+  { subject:"Happy Monday — quick market update from PT 👋", body:`Happy Monday, {name}!\n\nHope your week is off to a great start. Wanted to shoot you a quick video with a few things worth knowing this week:\n\n• Rates are moving — now's a great time to get buyers pre-approved\n• I'm processing files faster than ever right now\n• If you've got buyers on the fence, let's get them a real number\n\nI can turn a pre-approval in 24 hours. Have a great week — I'm always just a text away.` },
+  { subject:"Heads up on rates this week — from PT 📊", body:`Hey {name}!\n\nRates moved in the last few days and I wanted to make sure you heard it from me first.\n\nQuick summary in the video — but the short version is this is worth a conversation with any buyers you've been nurturing.\n\nI can get anyone pre-approved fast. Let me know if you want me to run numbers for anyone specific.\n\nTalk soon!` },
+  { subject:"Monday check-in from your mortgage guy 🤝", body:`Hey {name}!\n\nJust a quick hello on this Monday morning. No big pitch — just wanted to stay on your radar.\n\nIf you've got a tricky deal, a buyer with a complicated situation, or just need a second opinion on financing — that's exactly what I'm here for.\n\nI process and pre-underwrite my own files, so when things get complicated, we find a solution.\n\nHave a great week!` },
+  { subject:"New loan program worth knowing about — PT 🏠", body:`Good morning, {name}!\n\nQuick Monday update — I've got a new program I think could be a game-changer for a few of your buyers.\n\nDetails in the video — but think about any buyers this might fit. These are the kinds of tools that turn a "can't do it" into a closed deal.\n\nLet's connect this week!\n\nTalk soon, PT` }
+];
+
+let stream, recorder, chunks = [], blob, videoId, timerInt, secs = 0;
+
+window.onload = () => {
+  loadTemplate(document.querySelector('.chip.active'), 0);
+  loadRealtors();
+};
+
+async function startRec() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+    document.getElementById('livePreview').srcObject = stream;
+    document.getElementById('livePreview').style.display = 'block';
+    document.getElementById('recordedVideo').style.display = 'none';
+    chunks = []; blob = null; videoId = null;
+
+    let opts = {};
+    try { opts = { mimeType:'video/webm;codecs=vp9,opus' }; recorder = new MediaRecorder(stream, opts); }
+    catch(e) { recorder = new MediaRecorder(stream); }
+
+    recorder.ondataavailable = e => { if(e.data.size>0) chunks.push(e.data); };
+    recorder.onstop = onStop;
+    recorder.start(100);
+
+    document.getElementById('btnRecord').disabled = true;
+    document.getElementById('btnStop').disabled = false;
+    document.getElementById('recBadge').classList.add('show');
+    document.getElementById('timer').classList.add('show');
+    document.getElementById('vidOverlay').style.display = 'block';
+    document.getElementById('sDot').className = 'sdot red';
+    document.getElementById('sStatus').textContent = 'Recording...';
+
+    secs = 0;
+    timerInt = setInterval(() => {
+      secs++;
+      const m = Math.floor(secs/60), s = secs%60;
+      document.getElementById('timer').textContent = `${m}:${s.toString().padStart(2,'0')}`;
+    }, 1000);
+  } catch(e) {
+    showToast('⚠️ Camera permission required');
+    document.getElementById('sStatus').textContent = 'Camera access denied';
+  }
+}
+
+function stopRec() {
+  if(recorder && recorder.state!=='inactive') recorder.stop();
+  clearInterval(timerInt);
+  stream?.getTracks().forEach(t=>t.stop());
+  document.getElementById('btnStop').disabled = true;
+  document.getElementById('recBadge').classList.remove('show');
+  document.getElementById('timer').classList.remove('show');
+}
+
+function onStop() {
+  blob = new Blob(chunks, { type:'video/webm' });
+  const url = URL.createObjectURL(blob);
+  const rv = document.getElementById('recordedVideo');
+  rv.src = url; rv.style.display = 'block';
+  document.getElementById('livePreview').style.display = 'none';
+  document.getElementById('btnRecord').style.display = 'none';
+  document.getElementById('btnRetake').style.display = 'flex';
+  document.getElementById('sDot').className = 'sdot green';
+  document.getElementById('sStatus').textContent = `✅ Recorded — ${Math.floor(secs/60)}:${(secs%60).toString().padStart(2,'0')}`;
+  showToast('✅ Video recorded! Ready to send.');
+  updateSummary();
+}
+
+function retake() {
+  document.getElementById('recordedVideo').style.display = 'none';
+  document.getElementById('livePreview').style.display = 'block';
+  document.getElementById('btnRecord').style.display = 'flex';
+  document.getElementById('btnRecord').disabled = false;
+  document.getElementById('btnRetake').style.display = 'none';
+  document.getElementById('sDot').className = 'sdot';
+  document.getElementById('sStatus').textContent = 'Click Start Recording to begin';
+  document.getElementById('vidOverlay').style.display = 'none';
+  blob = null; videoId = null;
+  updateSummary();
+}
+
+function loadTemplate(el, idx) {
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  const t = TEMPLATES[idx];
+  document.getElementById('subject').value = t.subject;
+  document.getElementById('msgBody').value = t.body;
+}
+
+function loadRealtors() {
+  fetch('/api/realtors').then(r=>r.json()).then(realtors => {
+    const list = document.getElementById('realtorList');
+    if(!realtors.length) {
+      list.innerHTML = '<div class="empty-state">No realtors yet. <a href="/contacts" style="color:#c9a84c">Add some →</a></div>';
+      return;
+    }
+    list.innerHTML = realtors.map(r => `
+      <div class="realtor-check" onclick="toggleCheck(${r.id})">
+        <input type="checkbox" id="chk_${r.id}" value="${r.id}" onchange="updateCount()">
+        <div class="realtor-check-avatar">${r.name[0]}</div>
+        <div>
+          <div class="realtor-check-name">${r.name}</div>
+          <div class="realtor-check-email">${r.company ? r.company + ' · ' : ''}${r.email}</div>
+        </div>
+      </div>
+    `).join('');
+    updateCount();
+  });
+}
+
+function toggleCheck(id) {
+  const chk = document.getElementById(`chk_${id}`);
+  chk.checked = !chk.checked;
+  updateCount();
+}
+
+function selectAll() {
+  const boxes = document.querySelectorAll('.realtor-list input[type=checkbox]');
+  const allChecked = [...boxes].every(b=>b.checked);
+  boxes.forEach(b=>b.checked=!allChecked);
+  updateCount();
+}
+
+function updateCount() {
+  const count = document.querySelectorAll('.realtor-list input:checked').length;
+  document.getElementById('selectCount').textContent = `${count} selected`;
+  updateSummary();
+}
+
+function updateSummary() {
+  const count = document.querySelectorAll('.realtor-list input:checked').length;
+  const summary = document.getElementById('sendSummary');
+  if(count > 0 && blob) {
+    summary.classList.add('show');
+    summary.innerHTML = `<p>✅ Ready to send your video to <strong style="color:#c9a84c">${count} realtor${count>1?'s':''}</strong>.<br>Each will get a personalized email with your face in it.</p>`;
+  } else {
+    summary.classList.remove('show');
+  }
+}
+
+async function sendVideos() {
+  if(!blob) { showToast('⚠️ Record a video first'); return; }
+  const checked = [...document.querySelectorAll('.realtor-list input:checked')].map(c=>parseInt(c.value));
+  if(!checked.length) { showToast('⚠️ Select at least one realtor'); return; }
+
+  const btn = document.getElementById('sendBtn');
+  btn.textContent = '⏳ Uploading video...';
+  btn.disabled = true;
+
+  try {
+    // Upload video
+    const formData = new FormData();
+    formData.append('video', blob, 'greeting.webm');
+    formData.append('title', document.getElementById('subject').value);
+    const uploadRes = await fetch('/api/upload', { method:'POST', body:formData });
+    const { id: vid } = await uploadRes.json();
+    videoId = vid;
+
+    btn.textContent = '⏳ Sending emails...';
+
+    // Get email settings
+    const settings = JSON.parse(localStorage.getItem('ptSettings') || '{}');
+
+    const sendRes = await fetch('/api/send', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        videoId: vid,
+        realtorIds: checked,
+        subject: document.getElementById('subject').value,
+        message: document.getElementById('msgBody').value,
+        senderEmail: settings.email || '',
+        senderPassword: settings.password || '',
+        senderHost: settings.host || 'smtp.gmail.com',
+        senderPort: settings.port || 587
+      })
+    });
+
+    const result = await sendRes.json();
+
+    if(result.mode === 'email') {
+      showToast(`🚀 Sent to ${result.sent} realtor${result.sent>1?'s':''}!`);
+      btn.textContent = `✅ Sent to ${result.sent} realtors!`;
+    } else {
+      showToast(`✅ Saved! Set up email in Settings to send directly.`);
+      btn.textContent = '✅ Saved — set up email in Settings';
+      // Show watch links
+      if(result.sendRecords) {
+        const summary = document.getElementById('sendSummary');
+        summary.classList.add('show');
+        summary.innerHTML = `<p style="margin-bottom:12px">✅ <strong>Video saved!</strong> Your watch page is ready:</p>
+          <a href="/watch/${vid}" target="_blank" style="color:#c9a84c;font-size:13px;word-break:break-all">${window.location.origin}/watch/${vid}</a>
+          <p style="margin-top:12px;font-size:12px;color:#8a94a0">Set up your email in <a href="/settings" style="color:#c9a84c">Settings</a> to send directly from the app.</p>`;
+      }
+    }
+  } catch(e) {
+    showToast('❌ Error — try again');
+    btn.textContent = '🚀 Upload & Send Videos';
+    btn.disabled = false;
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
