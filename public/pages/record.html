@@ -356,18 +356,15 @@ async function sendVideos() {
 
     if(result.mode === 'email') {
       showToast(`🚀 Sent to ${result.sent} realtor${result.sent>1?'s':''}!`);
-      btn.textContent = `✅ Sent to ${result.sent} realtors!`;
+      btn.textContent = `✅ Sent to ${result.sent} realtor${result.sent>1?'s':''}!`;
+    } else if(result.error) {
+      showToast(`❌ Error: ${result.error}`);
+      btn.textContent = '❌ Failed — try again';
+      btn.disabled = false;
     } else {
-      showToast(`✅ Saved! Set up email in Settings to send directly.`);
-      btn.textContent = '✅ Saved — set up email in Settings';
-      // Show watch links
-      if(result.sendRecords) {
-        const summary = document.getElementById('sendSummary');
-        summary.classList.add('show');
-        summary.innerHTML = `<p style="margin-bottom:12px">✅ <strong>Video saved!</strong> Your watch page is ready:</p>
-          <a href="/watch/${vid}" target="_blank" style="color:#c9a84c;font-size:13px;word-break:break-all">${window.location.origin}/watch/${vid}</a>
-          <p style="margin-top:12px;font-size:12px;color:#8a94a0">Set up your email in <a href="/settings" style="color:#c9a84c">Settings</a> to send directly from the app.</p>`;
-      }
+      showToast(`✅ Video saved!`);
+      btn.textContent = '✅ Video saved!';
+    }
     }
   } catch(e) {
     showToast('❌ Error — try again');
