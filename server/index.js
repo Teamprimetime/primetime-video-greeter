@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const sgMail = require('@sendgrid/mail');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
@@ -9,80 +9,74 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Setup
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Ensure uploads directory exists
+// Uploads directory
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
-// Ensure database directory exists
-const dbDir = path.join(__dirname, '../database');
-if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-
-// Database
-const db = new sqlite3.Database(path.join(dbDir, 'primetime.db'));
-
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS realtors (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    company TEXT,
-    phone TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-  db.run(`CREATE TABLE IF NOT EXISTS videos (
-    id TEXT PRIMARY KEY,
-    filename TEXT NOT NULL,
-    title TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-  db.run(`CREATE TABLE IF NOT EXISTS sends (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    video_id TEXT NOT NULL,
-    realtor_id INTEGER NOT NULL,
-    realtor_name TEXT,
-    realtor_email TEXT,
-    message TEXT,
-    subject TEXT,
-    sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    viewed INTEGER DEFAULT 0,
-    viewed_at DATETIME,
-    view_count INTEGER DEFAULT 0
-  )`);
+// Neon PostgreSQL
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
-// Video upload storage
+// Init tables
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS realtors (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      company TEXT,
+      phone TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS videos (
+      id TEXT PRIMARY KEY,
+      filename TEXT NOT NULL,
+      title TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS sends (
+      id SERIAL PRIMARY KEY,
+      video_id TEXT NOT NULL,
+      realtor_id INTEGER NOT NULL,
+      realtor_name TEXT,
+      realtor_email TEXT,
+      message TEXT,
+      subject TEXT,
+      sent_at TIMESTAMP DEFAULT NOW(),
+      viewed BOOLEAN DEFAULT FALSE,
+      viewed_at TIMESTAMP,
+      view_count INTEGER DEFAULT 0
+    );
+  `);
+  console.log('✅ Database ready');
+}
+
+initDB().catch(console.error);
+
+// Video upload
 const storage = multer.diskStorage({
   destination: uploadsDir,
-  filename: (req, file, cb) => {
-    const id = uuidv4();
-    cb(null, `${id}.webm`);
-  }
+  filename: (req, file, cb) => cb(null, `${uuidv4()}.webm`)
 });
 const upload = multer({ storage, limits: { fileSize: 200 * 1024 * 1024 } });
-
-// Helper: promisify db queries
-const dbGet = (sql, params=[]) => new Promise((res,rej) => db.get(sql,params,(e,r)=>e?rej(e):res(r)));
-const dbAll = (sql, params=[]) => new Promise((res,rej) => db.all(sql,params,(e,r)=>e?rej(e):res(r)));
-const dbRun = (sql, params=[]) => new Promise((res,rej) => db.run(sql,params,function(e){e?rej(e):res(this)}));
-
-// ─── ROUTES ───────────────────────────────────────────────
 
 // Upload video
 app.post('/api/upload', upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const id = path.parse(req.file.filename).name;
-  await dbRun('INSERT INTO videos (id, filename, title) VALUES (?, ?, ?)', [id, req.file.filename, req.body.title || 'Monday Greeting']);
+  await pool.query('INSERT INTO videos (id, filename, title) VALUES ($1, $2, $3)', [id, req.file.filename, req.body.title || 'Monday Greeting']);
   res.json({ id, url: `/watch/${id}` });
 });
 
-// Get all realtors
+// Get realtors
 app.get('/api/realtors', async (req, res) => {
-  const realtors = await dbAll('SELECT * FROM realtors ORDER BY name ASC');
-  res.json(realtors);
+  const result = await pool.query('SELECT * FROM realtors ORDER BY name ASC');
+  res.json(result.rows);
 });
 
 // Add realtor
@@ -90,8 +84,8 @@ app.post('/api/realtors', async (req, res) => {
   const { name, email, company, phone } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'Name and email required' });
   try {
-    const result = await dbRun('INSERT INTO realtors (name, email, company, phone) VALUES (?, ?, ?, ?)', [name, email, company||'', phone||'']);
-    res.json({ id: result.lastID, name, email, company, phone });
+    const result = await pool.query('INSERT INTO realtors (name, email, company, phone) VALUES ($1, $2, $3, $4) RETURNING *', [name, email, company || '', phone || '']);
+    res.json(result.rows[0]);
   } catch (e) {
     res.status(400).json({ error: 'Email already exists' });
   }
@@ -99,47 +93,39 @@ app.post('/api/realtors', async (req, res) => {
 
 // Delete realtor
 app.delete('/api/realtors/:id', async (req, res) => {
-  await dbRun('DELETE FROM realtors WHERE id = ?', [req.params.id]);
+  await pool.query('DELETE FROM realtors WHERE id = $1', [req.params.id]);
   res.json({ success: true });
 });
 
-// Send video emails
+// Send videos
 app.post('/api/send', async (req, res) => {
-  const { videoId, realtorIds, subject, message, senderEmail, senderPassword, senderHost, senderPort } = req.body;
-  
-  const video = await dbGet('SELECT * FROM videos WHERE id = ?', [videoId]);
-  if (!video) return res.status(404).json({ error: 'Video not found' });
+  const { videoId, realtorIds, subject, message } = req.body;
+  const video = await pool.query('SELECT * FROM videos WHERE id = $1', [videoId]);
+  if (!video.rows[0]) return res.status(404).json({ error: 'Video not found' });
 
-  const realtors = (await Promise.all(realtorIds.map(id => dbGet('SELECT * FROM realtors WHERE id = ?', [id])))).filter(Boolean);
+  const realtors = (await Promise.all(realtorIds.map(id => pool.query('SELECT * FROM realtors WHERE id = $1', [id])))).map(r => r.rows[0]).filter(Boolean);
   if (!realtors.length) return res.status(400).json({ error: 'No valid realtors' });
 
   const sendRecords = [];
   for (const r of realtors) {
     const personalMsg = message.replace(/{name}/g, r.name.split(' ')[0]);
-    const result = await dbRun('INSERT INTO sends (video_id, realtor_id, realtor_name, realtor_email, message, subject) VALUES (?, ?, ?, ?, ?, ?)', [videoId, r.id, r.name, r.email, personalMsg, subject]);
-    sendRecords.push({ sendId: result.lastID, realtor: r, message: personalMsg });
+    const result = await pool.query('INSERT INTO sends (video_id, realtor_id, realtor_name, realtor_email, message, subject) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id', [videoId, r.id, r.name, r.email, personalMsg, subject]);
+    sendRecords.push({ sendId: result.rows[0].id, realtor: r, message: personalMsg });
   }
 
-  const emailUser = process.env.SMTP_EMAIL || senderEmail;
-  const emailPass = process.env.SMTP_PASSWORD || senderPassword;
-  const emailHost = process.env.SMTP_HOST || senderHost || 'mail.privateemail.com';
-  const emailPort = parseInt(process.env.SMTP_PORT || senderPort || 465);
+  const apiKey = process.env.SENDGRID_API_KEY;
+  const fromEmail = process.env.SMTP_EMAIL || 'paul@teamprimetimeloans.com';
 
-  if (emailUser && emailPass) {
+  if (apiKey) {
     try {
-      const transporter = nodemailer.createTransport({
-        host: emailHost,
-        port: emailPort,
-        secure: emailPort === 465,
-        auth: { user: emailUser, pass: emailPass }
-      });
+      sgMail.setApiKey(apiKey);
       const baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
       for (const { sendId, realtor, message: personalMsg } of sendRecords) {
         const watchUrl = `${baseUrl}/watch/${videoId}?sid=${sendId}`;
         const firstName = realtor.name.split(' ')[0];
         const html = generateEmailHTML(firstName, personalMsg, watchUrl, videoId, baseUrl);
-        await transporter.sendMail({
-          from: `"Paul PT Terwilliger - Team Prime Time" <${emailUser}>`,
+        await sgMail.send({
+          from: { email: fromEmail, name: 'Paul PT Terwilliger - Team Prime Time' },
           to: realtor.email,
           subject: subject.replace(/{name}/g, firstName),
           html
@@ -147,7 +133,7 @@ app.post('/api/send', async (req, res) => {
       }
       res.json({ success: true, sent: realtors.length, mode: 'email' });
     } catch (e) {
-      console.error('Email error:', e.message);
+      console.error('Email error:', e.message, JSON.stringify(e.response && e.response.body));
       res.json({ success: true, sent: realtors.length, mode: 'preview', error: e.message });
     }
   } else {
@@ -155,27 +141,31 @@ app.post('/api/send', async (req, res) => {
   }
 });
 
-// Track video view
+// Track view
 app.get('/api/track/:sendId', async (req, res) => {
-  const send = await dbGet('SELECT * FROM sends WHERE id = ?', [req.params.sendId]);
-  if (send) await dbRun('UPDATE sends SET viewed = 1, view_count = view_count + 1, viewed_at = CURRENT_TIMESTAMP WHERE id = ?', [req.params.sendId]);
+  await pool.query('UPDATE sends SET viewed = TRUE, view_count = view_count + 1, viewed_at = NOW() WHERE id = $1', [req.params.sendId]);
   const pixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
   res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': pixel.length });
   res.end(pixel);
 });
 
-// Get dashboard stats
+// Stats
 app.get('/api/stats', async (req, res) => {
-  const [sent, viewed, recentSends, realtors] = await Promise.all([
-    dbGet('SELECT COUNT(*) as count FROM sends'),
-    dbGet('SELECT COUNT(*) as count FROM sends WHERE viewed = 1'),
-    dbAll('SELECT s.*, v.title as video_title FROM sends s LEFT JOIN videos v ON s.video_id = v.id ORDER BY s.sent_at DESC LIMIT 20'),
-    dbGet('SELECT COUNT(*) as count FROM realtors')
+  const [sent, viewed, recent, realtors] = await Promise.all([
+    pool.query('SELECT COUNT(*) FROM sends'),
+    pool.query('SELECT COUNT(*) FROM sends WHERE viewed = TRUE'),
+    pool.query('SELECT s.*, v.title as video_title FROM sends s LEFT JOIN videos v ON s.video_id = v.id ORDER BY s.sent_at DESC LIMIT 20'),
+    pool.query('SELECT COUNT(*) FROM realtors')
   ]);
-  res.json({ totalSent: sent.count, totalViewed: viewed.count, recentSends, realtorCount: realtors.count });
+  res.json({
+    totalSent: parseInt(sent.rows[0].count),
+    totalViewed: parseInt(viewed.rows[0].count),
+    recentSends: recent.rows,
+    realtorCount: parseInt(realtors.rows[0].count)
+  });
 });
 
-// Serve video file
+// Serve video
 app.get('/uploads/:filename', (req, res) => {
   const filePath = path.join(uploadsDir, req.params.filename);
   if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
@@ -183,38 +173,29 @@ app.get('/uploads/:filename', (req, res) => {
 });
 
 // Watch page
-app.get('/watch/:videoId', (req, res) => {
-  const { videoId, sid } = req.query.sid ? req.query : { videoId: req.params.videoId };
+app.get('/watch/:videoId', async (req, res) => {
   const id = req.params.videoId;
   const sendId = req.query.sid;
-  const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(id);
-  if (!video) return res.status(404).send('Video not found');
-  
+  const video = await pool.query('SELECT * FROM videos WHERE id = $1', [id]);
+  if (!video.rows[0]) return res.status(404).send('Video not found');
   let realtorName = '';
   if (sendId) {
-    const send = db.prepare('SELECT * FROM sends WHERE id = ?').get(sendId);
-    if (send) realtorName = send.realtor_name;
+    const send = await pool.query('SELECT * FROM sends WHERE id = $1', [sendId]);
+    if (send.rows[0]) realtorName = send.rows[0].realtor_name;
   }
-
-  res.send(generateWatchPage(id, video.filename, realtorName, sendId));
+  res.send(generateWatchPage(id, video.rows[0].filename, realtorName, sendId));
 });
 
-// Serve main app pages
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 app.get('/record', (req, res) => res.sendFile(path.join(__dirname, '../public/pages/record.html')));
 app.get('/contacts', (req, res) => res.sendFile(path.join(__dirname, '../public/pages/contacts.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, '../public/pages/dashboard.html')));
 app.get('/settings', (req, res) => res.sendFile(path.join(__dirname, '../public/pages/settings.html')));
 
-// ─── HTML GENERATORS ──────────────────────────────────────
-
 function generateEmailHTML(firstName, message, watchUrl, videoId, baseUrl) {
-  const trackPixel = `${baseUrl}/api/track/${videoId}`;
   const msgHtml = message.replace(/\n/g, '<br>');
-  return `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f4f4f4;font-family:'Georgia',serif">
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:Georgia,serif">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:30px 0">
 <tr><td align="center">
 <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px">
@@ -224,17 +205,13 @@ function generateEmailHTML(firstName, message, watchUrl, videoId, baseUrl) {
   </td></tr>
   <tr><td style="padding:32px">
     <p style="font-size:16px;color:#0d1b2a;margin:0 0 24px">Hey ${firstName},</p>
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
-      <tr><td>
-        <a href="${watchUrl}" style="display:block;text-decoration:none;border-radius:10px;overflow:hidden;position:relative">
-          <div style="background:#0d1b2a;border-radius:10px;padding:60px 20px;text-align:center">
-            <div style="width:64px;height:64px;background:#c9a84c;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:12px">▶</div>
-            <div style="font-family:Georgia,serif;font-size:18px;color:#c9a84c;font-weight:bold">Good morning, ${firstName}!</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:1px;text-transform:uppercase;margin-top:4px">Click to watch PT's message</div>
-          </div>
-        </a>
-      </td></tr>
-    </table>
+    <a href="${watchUrl}" style="display:block;text-decoration:none;border-radius:10px;overflow:hidden;margin-bottom:24px">
+      <div style="background:#0d1b2a;border-radius:10px;padding:60px 20px;text-align:center">
+        <div style="width:64px;height:64px;background:#c9a84c;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:12px">▶</div>
+        <div style="font-family:Georgia,serif;font-size:18px;color:#c9a84c;font-weight:bold">Good morning, ${firstName}!</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:1px;text-transform:uppercase;margin-top:4px">Click to watch PT's message</div>
+      </div>
+    </a>
     <div style="font-size:15px;line-height:1.7;color:#333;margin-bottom:28px">${msgHtml}</div>
     <table cellpadding="0" cellspacing="0" style="border-top:2px solid #c9a84c;padding-top:20px;width:100%">
       <tr>
@@ -243,7 +220,6 @@ function generateEmailHTML(firstName, message, watchUrl, videoId, baseUrl) {
           <div style="font-weight:bold;font-size:15px;color:#0d1b2a">Paul "PT" Terwilliger</div>
           <div style="font-size:12px;color:#666">Mortgage Broker · Barrett Financial Group</div>
           <div style="font-size:12px;color:#c9a84c;font-weight:bold">(860) 639-8290 · TeamPrimeTimeLoans.com</div>
-          <div style="font-size:11px;color:#999">NMLS #321929</div>
         </td>
       </tr>
     </table>
@@ -251,67 +227,28 @@ function generateEmailHTML(firstName, message, watchUrl, videoId, baseUrl) {
 </table>
 </td></tr>
 </table>
-<img src="${trackPixel}" width="1" height="1" style="display:none">
+<img src="${baseUrl}/api/track/${videoId}" width="1" height="1" style="display:none">
 </body></html>`;
 }
 
 function generateWatchPage(videoId, filename, realtorName, sendId) {
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Message from PT — Team Prime Time Loans</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#0d1b2a;color:#f8f5ef;font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
-.card{background:#162236;border-radius:20px;overflow:hidden;max-width:640px;width:100%;box-shadow:0 40px 80px rgba(0,0,0,0.5)}
-.card-header{background:#0d1b2a;padding:20px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(201,168,76,0.2)}
-.brand{font-family:'Playfair Display',serif;font-size:18px;color:#c9a84c;font-weight:900}
-.brand-sub{font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:2px;text-transform:uppercase}
-.video-wrap{position:relative;background:#000;aspect-ratio:16/9}
-video{width:100%;height:100%;object-fit:cover;display:block}
-.card-body{padding:28px}
-.greeting{font-family:'Playfair Display',serif;font-size:22px;color:#c9a84c;margin-bottom:8px}
-.sub{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:24px}
-.cta-btn{display:block;width:100%;padding:16px;background:linear-gradient(135deg,#c9a84c,#e8c96a);color:#0d1b2a;font-weight:700;font-size:15px;text-align:center;border-radius:10px;text-decoration:none;margin-bottom:12px;font-family:'DM Sans',sans-serif}
-.cta-secondary{display:block;width:100%;padding:14px;background:transparent;color:#c9a84c;font-weight:600;font-size:14px;text-align:center;border-radius:10px;text-decoration:none;border:1px solid rgba(201,168,76,0.3);font-family:'DM Sans',sans-serif}
-.sig{display:flex;align-items:center;gap:14px;margin-top:24px;padding-top:20px;border-top:1px solid rgba(201,168,76,0.2)}
-.avatar{width:48px;height:48px;background:#0d1b2a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:18px;color:#c9a84c;font-weight:900;flex-shrink:0}
-.sig-name{font-weight:700;font-size:14px}
-.sig-title{font-size:12px;color:rgba(255,255,255,0.5)}
-.sig-contact{font-size:12px;color:#c9a84c;font-weight:600}
-</style>
-</head>
-<body>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0d1b2a;color:#f8f5ef;font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}.card{background:#162236;border-radius:20px;overflow:hidden;max-width:640px;width:100%;box-shadow:0 40px 80px rgba(0,0,0,0.5)}.card-header{background:#0d1b2a;padding:20px 28px;border-bottom:1px solid rgba(201,168,76,0.2)}.brand{font-family:'Playfair Display',serif;font-size:18px;color:#c9a84c;font-weight:900}.brand-sub{font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:2px;text-transform:uppercase}.video-wrap{background:#000;aspect-ratio:16/9}video{width:100%;height:100%;object-fit:cover;display:block}.card-body{padding:28px}.greeting{font-family:'Playfair Display',serif;font-size:22px;color:#c9a84c;margin-bottom:8px}.sub{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:24px}.cta-btn{display:block;width:100%;padding:16px;background:linear-gradient(135deg,#c9a84c,#e8c96a);color:#0d1b2a;font-weight:700;font-size:15px;text-align:center;border-radius:10px;text-decoration:none;margin-bottom:12px}.sig{display:flex;align-items:center;gap:14px;margin-top:24px;padding-top:20px;border-top:1px solid rgba(201,168,76,0.2)}.avatar{width:48px;height:48px;background:#0d1b2a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:18px;color:#c9a84c;font-weight:900;flex-shrink:0}.sig-name{font-weight:700;font-size:14px}.sig-title{font-size:12px;color:rgba(255,255,255,0.5)}.sig-contact{font-size:12px;color:#c9a84c;font-weight:600}</style>
+</head><body>
 <div class="card">
-  <div class="card-header">
-    <div>
-      <div class="brand">Team Prime Time Loans</div>
-      <div class="brand-sub">Paul "PT" Terwilliger · NMLS #321929</div>
-    </div>
-  </div>
-  <div class="video-wrap">
-    <video controls autoplay playsinline src="/uploads/${filename}"></video>
-  </div>
+  <div class="card-header"><div class="brand">Team Prime Time Loans</div><div class="brand-sub">Paul "PT" Terwilliger · NMLS #321929</div></div>
+  <div class="video-wrap"><video controls autoplay playsinline src="/uploads/${filename}"></video></div>
   <div class="card-body">
     <div class="greeting">Good morning${realtorName ? ', ' + realtorName.split(' ')[0] : ''}! 👋</div>
     <div class="sub">A personal message from your mortgage guy, PT</div>
     <a href="tel:8606398290" class="cta-btn">📞 Call PT — (860) 639-8290</a>
-    <a href="https://teamprimetimeloans.com" class="cta-secondary" target="_blank">Visit TeamPrimeTimeLoans.com</a>
-    <div class="sig">
-      <div class="avatar">PT</div>
-      <div>
-        <div class="sig-name">Paul "PT" Terwilliger</div>
-        <div class="sig-title">Mortgage Broker · Barrett Financial Group</div>
-        <div class="sig-contact">(860) 639-8290 · NMLS #321929</div>
-      </div>
-    </div>
+    <div class="sig"><div class="avatar">PT</div><div><div class="sig-name">Paul "PT" Terwilliger</div><div class="sig-title">Mortgage Broker · Barrett Financial Group</div><div class="sig-contact">(860) 639-8290 · NMLS #321929</div></div></div>
   </div>
 </div>
-</body>
-</html>`;
+<img src="/api/track/${sendId || videoId}" width="1" height="1" style="display:none">
+</body></html>`;
 }
 
 app.listen(PORT, () => console.log(`✅ Team Prime Time Video running on port ${PORT}`));
