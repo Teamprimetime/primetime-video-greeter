@@ -2,6 +2,8 @@ const express = require('express');
 const multer = require('multer');
 const sgMail = require('@sendgrid/mail');
 const { Pool } = require('pg');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
@@ -12,7 +14,18 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Uploads directory
+// R2 Storage
+const s3 = new S3Client({
+  region: 'auto',
+  endpoint: process.env.R2_ENDPOINT,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY,
+    secretAccessKey: process.env.R2_SECRET_KEY,
+  },
+});
+const BUCKET = process.env.R2_BUCKET || 'primetime-videos';
+
+// Temp uploads
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
@@ -22,7 +35,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Init tables
 async function initDB() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS realtors (
@@ -55,22 +67,50 @@ async function initDB() {
   `);
   console.log('✅ Database ready');
 }
-
 initDB().catch(console.error);
 
-// Video upload
+// Multer - temp storage
 const storage = multer.diskStorage({
   destination: uploadsDir,
   filename: (req, file, cb) => cb(null, `${uuidv4()}.webm`)
 });
 const upload = multer({ storage, limits: { fileSize: 200 * 1024 * 1024 } });
 
-// Upload video
+// Upload video -> R2
 app.post('/api/upload', upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const id = path.parse(req.file.filename).name;
+  const fileBuffer = fs.readFileSync(req.file.path);
+  
+  try {
+    await s3.send(new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: req.file.filename,
+      Body: fileBuffer,
+      ContentType: 'video/webm'
+    }));
+    fs.unlinkSync(req.file.path); // clean up temp file
+    console.log('✅ Video uploaded to R2:', req.file.filename);
+  } catch(e) {
+    console.error('R2 upload error:', e.message);
+  }
+
   await pool.query('INSERT INTO videos (id, filename, title) VALUES ($1, $2, $3)', [id, req.file.filename, req.body.title || 'Monday Greeting']);
   res.json({ id, url: `/watch/${id}` });
+});
+
+// Serve video from R2
+app.get('/uploads/:filename', async (req, res) => {
+  try {
+    const url = await getSignedUrl(s3, new GetObjectCommand({
+      Bucket: BUCKET,
+      Key: req.params.filename
+    }), { expiresIn: 3600 });
+    res.redirect(url);
+  } catch(e) {
+    console.error('R2 get error:', e.message);
+    res.status(404).send('Video not found');
+  }
 });
 
 // Get realtors
@@ -163,13 +203,6 @@ app.get('/api/stats', async (req, res) => {
     recentSends: recent.rows,
     realtorCount: parseInt(realtors.rows[0].count)
   });
-});
-
-// Serve video
-app.get('/uploads/:filename', (req, res) => {
-  const filePath = path.join(uploadsDir, req.params.filename);
-  if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
-  res.sendFile(filePath);
 });
 
 // Watch page
