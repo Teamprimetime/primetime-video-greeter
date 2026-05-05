@@ -183,7 +183,7 @@ app.post('/api/send', async (req, res) => {
 
 // Track view
 app.get('/api/track/:sendId', async (req, res) => {
-  await pool.query('UPDATE sends SET viewed = TRUE, view_count = view_count + 1, viewed_at = NOW() WHERE id = $1', [req.params.sendId]);
+ await pool.query('UPDATE sends SET viewed = TRUE, view_count = view_count + 1, viewed_at = NOW() WHERE id = $1', [parseInt(req.params.sendId)]);
   const pixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
   res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': pixel.length });
   res.end(pixel);
