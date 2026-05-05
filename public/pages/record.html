@@ -365,8 +365,7 @@ async function sendVideos() {
       showToast(`✅ Video saved!`);
       btn.textContent = '✅ Video saved!';
     }
-    }
-  } catch(e) {
+    }  } catch(e) {
     showToast('❌ Error — try again');
     btn.textContent = '🚀 Upload & Send Videos';
     btn.disabled = false;
