@@ -234,7 +234,7 @@ function generateEmailHTML(firstName, message, watchUrl, videoId, baseUrl) {
 <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;max-width:600px">
   <tr><td style="background:#0d1b2a;padding:24px 32px;text-align:center">
     <div style="font-family:Georgia,serif;font-size:22px;font-weight:bold;color:#c9a84c">Team Prime Time Loans</div>
-    <div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:2px;text-transform:uppercase;margin-top:4px">Paul "PT" Terwilliger · NMLS #321929</div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:2px;text-transform:uppercase;margin-top:4px">Paul Terwilliger · NMLS #321929</div>
   </td></tr>
   <tr><td style="padding:32px">
     <p style="font-size:16px;color:#0d1b2a;margin:0 0 24px">Hey ${firstName},</p>
@@ -250,7 +250,7 @@ function generateEmailHTML(firstName, message, watchUrl, videoId, baseUrl) {
       <tr>
         <td style="width:52px;height:52px;background:#0d1b2a;border-radius:50%;text-align:center;vertical-align:middle;font-family:Georgia,serif;font-size:20px;color:#c9a84c;font-weight:bold">PT</td>
         <td style="padding-left:14px;vertical-align:middle">
-          <div style="font-weight:bold;font-size:15px;color:#0d1b2a">Paul "PT" Terwilliger</div>
+          <div style="font-weight:bold;font-size:15px;color:#0d1b2a">Paul Terwilliger</div>
           <div style="font-size:12px;color:#666">Mortgage Broker · Barrett Financial Group</div>
           <div style="font-size:12px;color:#c9a84c;font-weight:bold">(860) 639-8290 · TeamPrimeTimeLoans.com</div>
         </td>
@@ -271,13 +271,13 @@ function generateWatchPage(videoId, filename, realtorName, sendId) {
 <style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0d1b2a;color:#f8f5ef;font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}.card{background:#162236;border-radius:20px;overflow:hidden;max-width:640px;width:100%;box-shadow:0 40px 80px rgba(0,0,0,0.5)}.card-header{background:#0d1b2a;padding:20px 28px;border-bottom:1px solid rgba(201,168,76,0.2)}.brand{font-family:'Playfair Display',serif;font-size:18px;color:#c9a84c;font-weight:900}.brand-sub{font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:2px;text-transform:uppercase}.video-wrap{background:#000;aspect-ratio:16/9}video{width:100%;height:100%;object-fit:cover;display:block}.card-body{padding:28px}.greeting{font-family:'Playfair Display',serif;font-size:22px;color:#c9a84c;margin-bottom:8px}.sub{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:24px}.cta-btn{display:block;width:100%;padding:16px;background:linear-gradient(135deg,#c9a84c,#e8c96a);color:#0d1b2a;font-weight:700;font-size:15px;text-align:center;border-radius:10px;text-decoration:none;margin-bottom:12px}.sig{display:flex;align-items:center;gap:14px;margin-top:24px;padding-top:20px;border-top:1px solid rgba(201,168,76,0.2)}.avatar{width:48px;height:48px;background:#0d1b2a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:18px;color:#c9a84c;font-weight:900;flex-shrink:0}.sig-name{font-weight:700;font-size:14px}.sig-title{font-size:12px;color:rgba(255,255,255,0.5)}.sig-contact{font-size:12px;color:#c9a84c;font-weight:600}</style>
 </head><body>
 <div class="card">
-  <div class="card-header"><div class="brand">Team Prime Time Loans</div><div class="brand-sub">Paul "PT" Terwilliger · NMLS #321929</div></div>
+  <div class="card-header"><div class="brand">Team Prime Time Loans</div><div class="brand-sub">Paul Terwilliger · NMLS #321929</div></div>
   <div class="video-wrap"><video controls autoplay playsinline src="/uploads/${filename}"></video></div>
   <div class="card-body">
     <div class="greeting">Good morning${realtorName ? ', ' + realtorName.split(' ')[0] : ''}! 👋</div>
     <div class="sub">A personal message from your mortgage guy, Paul</div>
     <a href="tel:8606398290" class="cta-btn">📞 Call PT — (860) 639-8290</a>
-    <div class="sig"><div class="avatar">PT</div><div><div class="sig-name">Paul "PT" Terwilliger</div><div class="sig-title">Mortgage Broker · Barrett Financial Group</div><div class="sig-contact">(860) 639-8290 · NMLS #321929</div></div></div>
+    <div class="sig"><div class="avatar">PT</div><div><div class="sig-name">Paul Terwilliger</div><div class="sig-title">Mortgage Broker · Barrett Financial Group</div><div class="sig-contact">(860) 639-8290 · NMLS #321929</div></div></div>
   </div>
 </div>
 <img src="/api/track/${sendId || videoId}" width="1" height="1" style="display:none">
