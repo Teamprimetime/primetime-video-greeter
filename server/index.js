@@ -241,8 +241,8 @@ function generateEmailHTML(firstName, message, watchUrl, videoId, baseUrl) {
     <a href="${watchUrl}" style="display:block;text-decoration:none;border-radius:10px;overflow:hidden;margin-bottom:24px">
       <div style="background:#0d1b2a;border-radius:10px;padding:60px 20px;text-align:center">
         <div style="width:64px;height:64px;background:#c9a84c;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:12px">▶</div>
-        <div style="font-family:Georgia,serif;font-size:18px;color:#c9a84c;font-weight:bold">Good morning, ${firstName}!</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:1px;text-transform:uppercase;margin-top:4px">Click to watch PT's message</div>
+        <div style="font-family:Georgia,serif;font-size:18px;color:#c9a84c;font-weight:bold"> ${firstName}!</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:1px;text-transform:uppercase;margin-top:4px">Click to watch Paul's message</div>
       </div>
     </a>
     <div style="font-size:15px;line-height:1.7;color:#333;margin-bottom:28px">${msgHtml}</div>
