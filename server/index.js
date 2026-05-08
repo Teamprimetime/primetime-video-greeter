@@ -274,7 +274,7 @@ function generateWatchPage(videoId, filename, realtorName, sendId) {
   <div class="card-header"><div class="brand">Team Prime Time Loans</div><div class="brand-sub">Paul Terwilliger · NMLS #321929</div></div>
   <div class="video-wrap"><video controls autoplay playsinline src="/uploads/${filename}"></video></div>
   <div class="card-body">
-    <div class="greeting">Good morning${realtorName ? ', ' + realtorName.split(' ')[0] : ''}! 👋</div>
+    <div class="greeting">Hey, ${realtorName ? ', ' + realtorName.split(' ')[0] : ''}! 👋</div>
     <div class="sub">A personal message from your mortgage guy, Paul</div>
     <a href="tel:8606398290" class="cta-btn">📞 Call PT — (860) 639-8290</a>
     <div class="sig"><div class="avatar">PT</div><div><div class="sig-name">Paul Terwilliger</div><div class="sig-title">Mortgage Broker · Barrett Financial Group</div><div class="sig-contact">(860) 639-8290 · NMLS #321929</div></div></div>
